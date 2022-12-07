@@ -1,0 +1,56 @@
+---
+- hosts: prod
+  tasks:
+
+  - name: Present tomcat
+    ansible.builtin.apt:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - default-jdk
+      - tomcat9
+    become: yes
+
+  - name: Make sure a service is running
+    ansible.builtin.systemd:
+      state: started
+      enabled: true
+      name: tomcat9
+
+# handlers file for webserver
+  - name: restart tomcat9
+    service: name=tomcat9 state=restarted
+
+- hosts: dev
+  vars:
+    repo_url: https://github.com/boxfuse/boxfuse-sample-java-war-hello.git
+    workspace: /src/webapps
+  tasks:
+
+  - name: Present packages dev
+    ansible.builtin.apt:
+      name: "{{ item }}"
+      state: latest
+    loop:
+      - default-jdk
+      - git
+      - maven
+    become: yes
+
+
+  - name: Git clone apps
+    ansible.builtin.git:
+      repo: "{{ repo_url }}"
+      dest: "{{ workspace }}"
+      clone: yes
+      update: yes
+
+  - name: Build app
+    shell: mvn package chdir="{{ workspace }}"
+
+  - name: Transfer file from ServerA to ServerB
+    synchronize:
+      src: /src/webapps/target/hello-1.0.war
+      dest: /var/lib/tomcat9/webapps/
+      mode: pull
+    delegate_to: 51.250.78.160
